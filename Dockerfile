@@ -55,5 +55,6 @@ VOLUME "$SONARQUBE_HOME/data"
 
 WORKDIR $SONARQUBE_HOME
 COPY run.sh $SONARQUBE_HOME/bin/
+COPY quality-gates.sh $SONARQUBE_HOME/bin/
 USER sonarqube
-ENTRYPOINT ["./bin/run.sh"]
+ENTRYPOINT ./bin/quality-gates.sh & ./bin/run.sh
