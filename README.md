@@ -16,7 +16,7 @@ Clone the repo and run the `build-and-run-container.sh` script. Or open it and r
 
 ## Custom Quality Gates
 
-Take a look at `quality-gates.sh` in source code and adjust it to your needs.
+Take a look at `quality.sh` in source code and adjust it to your needs.
 
 By default, that script will create a new `aem-gate` Gate and set the following Conditions:
 

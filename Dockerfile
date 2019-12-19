@@ -11,7 +11,9 @@ ENV SONAR_VERSION=7.7 \
     # Drop these in the next release, also in the run script
     SONARQUBE_JDBC_USERNAME=sonar \
     SONARQUBE_JDBC_PASSWORD=sonar \
-    SONARQUBE_JDBC_URL=
+    SONARQUBE_JDBC_URL= \
+    AEM_RULES_JAR_URL=https://github.com/Cognifide/AEM-Rules-for-SonarQube/releases/download/v1.0-RC2/aemrules-1.0-RC2.jar
+
 
 # Http port
 EXPOSE 9000:9000
@@ -47,7 +49,7 @@ RUN set -x \
     && rm sonarqube.zip* \
     && rm -rf $SONARQUBE_HOME/bin/* \
     # download and add AEM rules
-    && curl -o aemrules.jar -fSL https://github.com/Cognifide/AEM-Rules-for-SonarQube/releases/download/v0.11/aemrules-0.11.jar \
+    && curl -o aemrules.jar -fSL $AEM_RULES_JAR_URL \
     && mv aemrules.jar sonarqube/extensions/plugins
 
 
@@ -55,6 +57,6 @@ VOLUME "$SONARQUBE_HOME/data"
 
 WORKDIR $SONARQUBE_HOME
 COPY run.sh $SONARQUBE_HOME/bin/
-COPY quality-gates.sh $SONARQUBE_HOME/bin/
+COPY quality.sh $SONARQUBE_HOME/bin/
 USER sonarqube
-ENTRYPOINT ./bin/quality-gates.sh & ./bin/run.sh
+ENTRYPOINT ./bin/quality.sh & ./bin/run.sh

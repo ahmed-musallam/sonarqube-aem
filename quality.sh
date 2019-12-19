@@ -8,11 +8,11 @@
 
 # print in blue color
 info () {
-  printf "\e[1;34m[quality-gates.sh]:: %s ::\e[0m\n" "$*"
+  printf "\e[1;34m[quality.sh]:: %s ::\e[0m\n" "$*"
 }
 # print in red color
 error () {
-  printf "\e[1;31m[quality-gates.sh]:: %s ::\e[0m\n" "$*"
+  printf "\e[1;31m[quality.sh]:: %s ::\e[0m\n" "$*"
 }
 
 # wait here untill sonar is up. sleep 5 seconds between checks.
@@ -43,13 +43,17 @@ post () {
   fi
 }
 
+#######
+## Quality Gates
+#######
+
 # create quality gate
-create () {
+create_gate () {
   post localhost:9000/api/qualitygates/create "$@"
 }
 
 # set gate as default
-set_as_default () {
+set_as_default_gate () {
   post localhost:9000/api/qualitygates/set_as_default "$@"
 }
 
@@ -62,10 +66,10 @@ create_condition () {
 gate_id=2
 
 info "Creating Quality Gate: aem-gate"
-create -d name=aem-gate
+create_gate -d name=aem-gate
 
 info "Setting aem-gate as the default Quality Gate."
-set_as_default -d id=$gate_id
+set_as_default_gate -d id=$gate_id
 
 info "Creating Condition: Code Coverage - 75% required"
 create_condition \
@@ -85,7 +89,7 @@ info "Creating Condition: Maintainability Rating - A required"
 create_condition \
   -d metric=sqale_rating \
   -d gateId=$gate_id \
-  -d error=1 
+  -d error=1 \
   -d op=GT
 
 info "Creating Condition: Reliability Rating - A required"
@@ -103,3 +107,58 @@ create_condition \
   -d op=GT
 
 info "Quality Gate Creation Done!"
+
+#######
+## Quality Profiles
+#######
+
+create_profile () {
+  post localhost:9000/api/qualityprofiles/create "$@"
+}
+
+change_profile_parent () {
+  post localhost:9000/api/qualityprofiles/change_parent "$@"
+
+}
+
+activate_rules () {
+  post localhost:9000/api/qualityprofiles/activate_rules "$@"
+}
+
+set_default () {
+  post localhost:9000/api/qualityprofiles/set_default "$@"
+}
+
+get_aem_profile_id () {
+  OUT="$(curl  -X POST --user admin:admin -s /dev/null localhost:9000/api/qualityprofiles/search -d qualityProfile=aem-way-java 2>/dev/null)"
+  pat='.*"key":"([^"]+)",.*'
+  [[ "$OUT" =~ $pat ]]
+  echo "${BASH_REMATCH[1]}"
+}
+
+
+
+#info "Create AEM Profile - Java"
+create_profile \
+  -d language=java \
+  -d name=aem-way-java
+
+
+info "Make AEM profile Inherit Sonar way"
+change_profile_parent \
+  -d language=java \
+  -d parentQualityProfile="Sonar way" \
+  -d qualityProfile="aem-way-java"
+
+info "setting aem-way-java as default"
+set_default \
+  -d language=java \
+  -d qualityProfile="aem-way-java"
+
+PROFILE_KEY=$(get_aem_profile_id)
+info "Activating AEM rules"
+activate_rules \
+  -d repositories="AEM Rules,Common HTL," \
+  -d targetKey=$PROFILE_KEY
+
+info "Quality Profile Creation done!"
