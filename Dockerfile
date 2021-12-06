@@ -12,7 +12,7 @@ ENV SONAR_VERSION=7.7 \
     SONARQUBE_JDBC_USERNAME=sonar \
     SONARQUBE_JDBC_PASSWORD=sonar \
     SONARQUBE_JDBC_URL= \
-    AEM_RULES_JAR_URL=https://github.com/Cognifide/AEM-Rules-for-SonarQube/releases/download/v1.0-RC2/aemrules-1.0-RC2.jar
+    AEM_RULES_JAR_URL=https://github.com/wttech/AEM-Rules-for-SonarQube/releases/download/v1.3/sonar-aemrules-plugin-1.3.jar
 
 
 # Http port
