@@ -1,62 +1,144 @@
-# This Dockerfile is the same as the official sonarqube docker image: https://github.com/SonarSource/docker-sonarqube/blob/abaf14c38297974eb5de295d42e83066ddb84751/7.7-community/Dockerfile
-# With added script to install AEM-Rules-for-SonarQube sonar rules: https://github.com/Cognifide/AEM-Rules-for-SonarQube
+# This Dockerfile is the same as the official sonarqube 8.9.9 LTS community docker image: https://github.com/SonarSource/docker-sonarqube/blob/master/8/community/Dockerfile
+# With added script to install v1.6 AEM-Rules-for-SonarQube sonar rules:  https://github.com/wttech/AEM-Rules-for-SonarQube 
 
-FROM openjdk:8
+FROM alpine:3.13.10
 
-ENV SONAR_VERSION=7.7 \
+ENV JAVA_VERSION="jdk-11.0.11+9" \
+    LANG='en_US.UTF-8' \
+    LANGUAGE='en_US:en' \
+    LC_ALL='en_US.UTF-8' 
+
+#
+# glibc setup
+#
+RUN set -eux; \
+    apk add --no-cache tzdata --virtual .build-deps curl binutils zstd; \
+    GLIBC_VER="2.33-r0"; \
+    ALPINE_GLIBC_REPO="https://github.com/sgerrand/alpine-pkg-glibc/releases/download"; \
+    GCC_LIBS_URL="https://archive.archlinux.org/packages/g/gcc-libs/gcc-libs-10.2.0-6-x86_64.pkg.tar.zst"; \
+    GCC_LIBS_SHA256="e33b45e4a10ef26259d6acf8e7b5dd6dc63800641e41eb67fa6588d061f79c1c"; \
+    ZLIB_URL="https://archive.archlinux.org/packages/z/zlib/zlib-1%3A1.2.12-1-x86_64.pkg.tar.zst"; \
+    ZLIB_SHA256=2b6d0f4ee6782993ef673aef2d71c3adbc6f7c31aad7b374a12fde43b8c333b0; \
+    curl -LfsS https://alpine-pkgs.sgerrand.com/sgerrand.rsa.pub -o /etc/apk/keys/sgerrand.rsa.pub; \
+    SGERRAND_RSA_SHA256="823b54589c93b02497f1ba4dc622eaef9c813e6b0f0ebbb2f771e32adf9f4ef2"; \
+    echo "${SGERRAND_RSA_SHA256} */etc/apk/keys/sgerrand.rsa.pub" | sha256sum -c - ; \
+    curl -LfsS ${ALPINE_GLIBC_REPO}/${GLIBC_VER}/glibc-${GLIBC_VER}.apk > /tmp/glibc-${GLIBC_VER}.apk; \
+    apk add --no-cache /tmp/glibc-${GLIBC_VER}.apk; \
+    curl -LfsS ${ALPINE_GLIBC_REPO}/${GLIBC_VER}/glibc-bin-${GLIBC_VER}.apk > /tmp/glibc-bin-${GLIBC_VER}.apk; \
+    apk add --no-cache /tmp/glibc-bin-${GLIBC_VER}.apk; \
+    curl -Ls ${ALPINE_GLIBC_REPO}/${GLIBC_VER}/glibc-i18n-${GLIBC_VER}.apk > /tmp/glibc-i18n-${GLIBC_VER}.apk; \
+    apk add --no-cache /tmp/glibc-i18n-${GLIBC_VER}.apk; \
+    /usr/glibc-compat/bin/localedef --inputfile en_US --charmap UTF-8 "$LANG" || true ;\
+    echo "export LANG=$LANG" > /etc/profile.d/locale.sh; \
+    curl -LfsS ${GCC_LIBS_URL} -o /tmp/gcc-libs.tar.zst; \
+    echo "${GCC_LIBS_SHA256} */tmp/gcc-libs.tar.zst" | sha256sum -c - ; \
+    mkdir /tmp/gcc; \
+    zstd -d /tmp/gcc-libs.tar.zst --output-dir-flat /tmp; \
+    tar -xf /tmp/gcc-libs.tar -C /tmp/gcc; \
+    mv /tmp/gcc/usr/lib/libgcc* /tmp/gcc/usr/lib/libstdc++* /usr/glibc-compat/lib; \
+    strip /usr/glibc-compat/lib/libgcc_s.so.* /usr/glibc-compat/lib/libstdc++.so*; \
+    curl -LfsS ${ZLIB_URL} -o /tmp/libz.tar.zst; \
+    echo "${ZLIB_SHA256} */tmp/libz.tar.zst" | sha256sum -c - ;\
+    mkdir /tmp/libz; \
+    zstd -d /tmp/libz.tar.zst --output-dir-flat /tmp; \
+    tar -xf /tmp/libz.tar -C /tmp/libz; \
+    mv /tmp/libz/usr/lib/libz.so* /usr/glibc-compat/lib; \
+    apk del --purge .build-deps glibc-i18n; \
+    rm -rf /tmp/*.apk /tmp/gcc /tmp/gcc-libs.tar* /tmp/libz /tmp/libz.tar.zst /var/cache/apk/*;
+
+#
+# Adoptium openjdk11 setup
+#
+RUN set -eux; \
+    apk add --no-cache --virtual .fetch-deps curl; \
+    ARCH="$(apk --print-arch)"; \
+    case "${ARCH}" in \
+       aarch64|arm64) \
+         ESUM='76f7da05d905b5f9de8de1a34c1a206744f7589bf0eed876cd9069cb1d913806'; \
+         BINARY_URL='https://github.com/adoptium/temurin11-binaries/releases/download/jdk-11.0.13%2B8/OpenJDK11U-jre_aarch64_linux_hotspot_11.0.13_8.tar.gz'; \
+         ;; \
+       armhf|armv7l) \
+         ESUM='aee2f20d005b58e79c3c6c02271f797cb387d33a135b762886990b9bf7cb262e'; \
+         BINARY_URL='https://github.com/adoptium/temurin11-binaries/releases/download/jdk-11.0.13%2B8/OpenJDK11U-jre_arm_linux_hotspot_11.0.13_8.tar.gz'; \
+         ;; \
+       ppc64el|ppc64le) \
+         ESUM='8f267876675dac3da3f4ceccd44d812b57098505eeec5fb1688d54bdeffcd1da'; \
+         BINARY_URL='https://github.com/adoptium/temurin11-binaries/releases/download/jdk-11.0.13%2B8/OpenJDK11U-jre_ppc64le_linux_hotspot_11.0.13_8.tar.gz'; \
+         ;; \
+       s390x) \
+         ESUM='b4a5af4ffcc98f6b7cdd2232f79aa12f20efa769b5255277fa4974e2e19d4409'; \
+         BINARY_URL='https://github.com/adoptium/temurin11-binaries/releases/download/jdk-11.0.13%2B8/OpenJDK11U-jre_s390x_linux_hotspot_11.0.13_8.tar.gz'; \
+         ;; \
+       amd64|x86_64) \
+         ESUM='fb0a27e6e1f26a1ee79daa92e4cfe3ec0d676acfe114d99dd84b3414f056e8a0'; \
+         BINARY_URL='https://github.com/adoptium/temurin11-binaries/releases/download/jdk-11.0.13%2B8/OpenJDK11U-jre_x64_linux_hotspot_11.0.13_8.tar.gz'; \
+         ;; \
+       *) \
+         echo "Unsupported arch: ${ARCH}"; \
+         exit 1; \
+         ;; \
+    esac; \
+    curl -LfsSo /tmp/openjdk.tar.gz ${BINARY_URL}; \
+    echo "${ESUM} */tmp/openjdk.tar.gz" | sha256sum -c -; \
+    mkdir -p /opt/java/openjdk; \
+    cd /opt/java/openjdk; \
+    tar -xf /tmp/openjdk.tar.gz --strip-components=1; \
+    apk del --purge .fetch-deps; \
+    rm -rf /var/cache/apk/*; \
+    rm -rf /tmp/openjdk.tar.gz;
+
+#
+# SonarQube setup
+#
+#
+# SonarQube setup with AEM Rules v1.6 jar
+#
+ARG SONARQUBE_VERSION=8.9.9.56886
+ARG SONARQUBE_ZIP_URL=https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-${SONARQUBE_VERSION}.zip
+ENV JAVA_HOME=/opt/java/openjdk \
+    PATH="/opt/java/openjdk/bin:$PATH" \
     SONARQUBE_HOME=/opt/sonarqube \
-    # Database configuration
-    # Defaults to using H2
-    # DEPRECATED. Use -v sonar.jdbc.username=... instead
-    # Drop these in the next release, also in the run script
-    SONARQUBE_JDBC_USERNAME=sonar \
-    SONARQUBE_JDBC_PASSWORD=sonar \
-    SONARQUBE_JDBC_URL= \
-    AEM_RULES_JAR_URL=https://github.com/wttech/AEM-Rules-for-SonarQube/releases/download/v1.3/sonar-aemrules-plugin-1.3.jar
+    SONAR_VERSION="${SONARQUBE_VERSION}" \
+    SQ_DATA_DIR="/opt/sonarqube/data" \
+    SQ_EXTENSIONS_DIR="/opt/sonarqube/extensions" \
+    SQ_LOGS_DIR="/opt/sonarqube/logs" \
+    SQ_TEMP_DIR="/opt/sonarqube/temp" \
+    AEM_RULES_JAR_URL=https://github.com/wttech/AEM-Rules-for-SonarQube/releases/download/v1.6/sonar-aemrules-plugin-1.6.jar
 
-
-# Http port
-EXPOSE 9000:9000
-
-RUN groupadd -r sonarqube && useradd -r -g sonarqube sonarqube
-
-# grab gosu for easy step-down from root
-RUN set -x \
-    && wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/1.10/gosu-$(dpkg --print-architecture)" \
-    && wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/1.10/gosu-$(dpkg --print-architecture).asc" \
-    && export GNUPGHOME="$(mktemp -d)" \
-    && (gpg --batch --keyserver keyserver.ubuntu.com --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
-        || gpg --batch --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4) \
-    && gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu \
-    && rm -rf "$GNUPGHOME" /usr/local/bin/gosu.asc \
-    && chmod +x /usr/local/bin/gosu \
-    && gosu nobody true
-
-RUN set -x \
+RUN set -eux; \
+    addgroup -S -g 1000 sonarqube; \
+    adduser -S -D -u 1000 -G sonarqube sonarqube; \
+    apk add --no-cache --virtual build-dependencies gnupg unzip curl; \
+    apk add --no-cache bash su-exec ttf-dejavu; \
     # pub   2048R/D26468DE 2015-05-25
     #       Key fingerprint = F118 2E81 C792 9289 21DB  CAB4 CFCA 4A29 D264 68DE
     # uid                  sonarsource_deployer (Sonarsource Deployer) <infra@sonarsource.com>
     # sub   2048R/06855C1D 2015-05-25
-    && (gpg --batch --keyserver keyserver.ubuntu.com --recv-keys F1182E81C792928921DBCAB4CFCA4A29D26468DE \
-        || gpg --batch --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys F1182E81C792928921DBCAB4CFCA4A29D26468DE) \
-    && cd /opt \
-    && curl -o sonarqube.zip -fSL https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-$SONAR_VERSION.zip \
-    && curl -o sonarqube.zip.asc -fSL https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-$SONAR_VERSION.zip.asc \
-    && gpg --batch --verify sonarqube.zip.asc sonarqube.zip \
-    && unzip sonarqube.zip \
-    && mv sonarqube-$SONAR_VERSION sonarqube \
-    && chown -R sonarqube:sonarqube sonarqube \
-    && rm sonarqube.zip* \
-    && rm -rf $SONARQUBE_HOME/bin/* \
-    # download and add AEM rules
-    && curl -o aemrules.jar -fSL $AEM_RULES_JAR_URL \
-    && mv aemrules.jar sonarqube/extensions/plugins
+    echo "networkaddress.cache.ttl=5" >> "${JAVA_HOME}/conf/security/java.security"; \
+    sed --in-place --expression="s?securerandom.source=file:/dev/random?securerandom.source=file:/dev/urandom?g" "${JAVA_HOME}/conf/security/java.security"; \
+    for server in $(shuf -e hkps://keys.openpgp.org \
+                            hkps://keyserver.ubuntu.com) ; do \
+        gpg --batch --keyserver "${server}" --recv-keys 679F1EE92B19609DE816FDE81DB198F93525EC1A && break || : ; \
+    done; \
+    mkdir --parents /opt; \
+    cd /opt; \
+    curl --fail --location --output sonarqube.zip --silent --show-error "${SONARQUBE_ZIP_URL}"; \
+    curl --fail --location --output sonarqube.zip.asc --silent --show-error "${SONARQUBE_ZIP_URL}.asc"; \
+    gpg --batch --verify sonarqube.zip.asc sonarqube.zip; \
+    unzip -q sonarqube.zip; \
+    mv "sonarqube-${SONARQUBE_VERSION}" sonarqube; \
+    curl --fail --location --output aemrules.jar --show-error "${AEM_RULES_JAR_URL}"; \
+    mv aemrules.jar sonarqube/extensions/plugins; \
+    rm sonarqube.zip*; \
+    rm -rf ${SONARQUBE_HOME}/bin/*; \
+    chown -R sonarqube:sonarqube ${SONARQUBE_HOME}; \
+    # this 777 will be replaced by 700 at runtime (allows semi-arbitrary "--user" values)
+    chmod -R 777 "${SQ_DATA_DIR}" "${SQ_EXTENSIONS_DIR}" "${SQ_LOGS_DIR}" "${SQ_TEMP_DIR}"; \
+    apk del --purge build-dependencies;
 
+COPY --chown=sonarqube:sonarqube run.sh sonar.sh ${SONARQUBE_HOME}/bin/
 
-VOLUME "$SONARQUBE_HOME/data"
-
-WORKDIR $SONARQUBE_HOME
-COPY run.sh $SONARQUBE_HOME/bin/
-COPY quality.sh $SONARQUBE_HOME/bin/
-USER sonarqube
-ENTRYPOINT ./bin/quality.sh & ./bin/run.sh
+WORKDIR ${SONARQUBE_HOME}
+EXPOSE 9000
+ENTRYPOINT ["bin/run.sh"]
+CMD ["bin/sonar.sh"]
