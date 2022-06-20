@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# add curl dependency
+apk add --no-cache --virtual quality-dependencies curl;
+
 #########
 # Creates Sonar Qube Custom Quality Gate.
 #########
@@ -15,7 +18,7 @@ error () {
   printf "\e[1;31m[quality.sh]:: %s ::\e[0m\n" "$*"
 }
 
-# wait here untill sonar is up. sleep 5 seconds between checks.
+# wait here until sonar is up. sleep 5 seconds between checks.
 while [[ "$(curl -s localhost:9000/api/system/status)" != *'"status":"UP"'* ]]; do 
   info "Waiting for Sonar to be ready.."
   sleep 5;
@@ -64,45 +67,46 @@ create_condition () {
 
 # by default, the newly created gate ID will be 2; Since Sonar Way gate is 1.
 gate_id=2
+gate_name=aem-gate
 
 info "Creating Quality Gate: aem-gate"
-create_gate -d name=aem-gate
+create_gate -d name=$gate_name
 
 info "Setting aem-gate as the default Quality Gate."
-set_as_default_gate -d id=$gate_id
+set_as_default_gate -d name=$gate_name
 
 info "Creating Condition: Code Coverage - 75% required"
 create_condition \
   -d metric=coverage \
-  -d gateId=$gate_id \
+  -d gateName=$gate_name \
   -d error=75 \
   -d op=LT
 
 info "Creating Condition: Code Smells - A required"
 create_condition \
   -d metric=code_smells \
-  -d gateId=$gate_id \
+  -d gateName=$gate_name \
   -d error=1 \
   -d op=GT
 
 info "Creating Condition: Maintainability Rating - A required"
 create_condition \
   -d metric=sqale_rating \
-  -d gateId=$gate_id \
+  -d gateName=$gate_name \
   -d error=1 \
   -d op=GT
 
 info "Creating Condition: Reliability Rating - A required"
 create_condition \
   -d metric=reliability_rating \
-  -d gateId=$gate_id \
+  -d gateName=$gate_name \
   -d error=1 \
   -d op=GT
 
 info "Creating Condition: Security Rating - A required"
 create_condition \
   -d metric=security_rating \
-  -d gateId=$gate_id \
+  -d gateName=$gate_name \
   -d error=1 \
   -d op=GT
 
@@ -160,5 +164,8 @@ info "Activating AEM rules"
 activate_rules \
   -d repositories="AEM Rules,Common HTL," \
   -d targetKey=$PROFILE_KEY
+
+# clean up curl dependency
+apk del --purge quality-dependencies;
 
 info "Quality Profile Creation done!"

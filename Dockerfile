@@ -88,7 +88,7 @@ RUN set -eux; \
     rm -rf /tmp/openjdk.tar.gz;
 
 #
-# SonarQube setup
+# SonarQube community setup
 #
 #
 # SonarQube setup with AEM Rules v1.6 jar
@@ -136,9 +136,9 @@ RUN set -eux; \
     chmod -R 777 "${SQ_DATA_DIR}" "${SQ_EXTENSIONS_DIR}" "${SQ_LOGS_DIR}" "${SQ_TEMP_DIR}"; \
     apk del --purge build-dependencies;
 
-COPY --chown=sonarqube:sonarqube run.sh sonar.sh ${SONARQUBE_HOME}/bin/
+COPY --chown=sonarqube:sonarqube run.sh sonar.sh quality.sh ${SONARQUBE_HOME}/bin/
 
 WORKDIR ${SONARQUBE_HOME}
 EXPOSE 9000
-ENTRYPOINT ["bin/run.sh"]
+ENTRYPOINT ["sh","-c","bin/quality.sh & bin/run.sh"]
 CMD ["bin/sonar.sh"]
