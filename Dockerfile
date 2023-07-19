@@ -1,7 +1,7 @@
 # This Dockerfile is the same as the official sonarqube 8.9.9 LTS community docker image: https://github.com/SonarSource/docker-sonarqube/blob/master/8/community/Dockerfile
 # With added script to install v1.6 AEM-Rules-for-SonarQube sonar rules:  https://github.com/wttech/AEM-Rules-for-SonarQube 
 
-FROM alpine:3.13.10
+FROM alpine:3.16
 
 ENV JAVA_VERSION="jdk-11.0.11+9" \
     LANG='en_US.UTF-8' \
